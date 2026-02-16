@@ -38,39 +38,123 @@ testset = torchvision.datasets.MNIST(root='./data', train=False, download=True, 
 trainloader = DataLoader(trainset, batch_size=64, shuffle=True)
 testloader = DataLoader(testset, batch_size=64, shuffle=False)
 
+import os
+
 model = ANN()
-loss_fn = nn.CrossEntropyLoss() #loss is y direction of the graph, weight is x direction, its a curve and the coordinates at (weight - x points) x is calculated, gradient is calculated later
-optimizer = optim.Adam(model.parameters(), lr=0.001) #lr=learning rate, controls how much the optimizer should change the parameters, if its too large, the changes may be too large, and also there is no one best rate, you usually test between 0.1, 0.01, 0.001 to find which is the best
+loss_fn = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+model_path = 'mnist_ann.pth'
 
-# Training
+def train_model(epochs):
+    """Train the model for the specified number of epochs"""
+    print(f"Training for {epochs} epoch(s)...")
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for images, labels in trainloader:
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = loss_fn(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+        print(f"Epoch {epoch+1}, loss: {running_loss/len(trainloader):.4f}")
+    torch.save(model.state_dict(), model_path)
+    print(f"Model saved as {model_path}")
+    test_model()
 
-episodes = 10
+def load_trained_model():
+    """Load the pre-trained model"""
+    if os.path.exists(model_path):
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        print(f"Loaded trained model from {model_path}")
+        test_model()
+        return True
+    else:
+        print(f"No trained model found at {model_path}")
+        return False
 
-for epoch in range(episodes):  #epoch is each episode
-    running_loss = 0.0 #resetting the loss, otherwise it would accumulate
-    for images, labels in trainloader: 
-        optimizer.zero_grad() #resetting the gradients, same as before
-        outputs = model(images) #get the model's predictions
-        loss = loss_fn(outputs, labels) #calculate the losses, by comparing with the real value in "labels"
-        loss.backward() #here we calculate the gradient of the losses respective to the weight, bias etc, by backtracking to weight and bias, hence the name
-        optimizer.step() #run the optimizer
-        running_loss +=loss.item()
-    print(f"Epoch {epoch+1}, loss: {running_loss/len(trainloader):.4f}")
+def test_model():
+    """Test the model accuracy"""
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for images, labels in testloader:
+            outputs = model(images)
+            _, predictions = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (predictions == labels).sum().item()
+    print(f"Accuracy: {100*correct/total:.2f}%")
 
-# Testing the model
-correct = 0
-total = 0
-
-model.eval()
-
-with torch.no_grad():
-    for images, labels in testloader:
-        outputs = model(images)
-        _, predictions = torch.max(outputs, 1) #torch max returns the max prob with the index
-        total += labels.size(0)
-        correct += (predictions == labels).sum().item()
-
-print(f"Accuracy: {100*correct/total:.2f}%")
+def show_menu():
+    """Show menu to choose training option"""
+    pygame.init()
+    screen = pygame.display.set_mode((500, 400))
+    pygame.display.set_caption("Choose Training Option")
+    clock = pygame.time.Clock()
+    
+    font = pygame.font.Font(None, 32)
+    title_font = pygame.font.Font(None, 40)
+    
+    # Define buttons
+    button_width = 400
+    button_height = 60
+    button_x = 50
+    
+    button1_rect = pygame.Rect(button_x, 80, button_width, button_height)
+    button2_rect = pygame.Rect(button_x, 160, button_width, button_height)
+    button3_rect = pygame.Rect(button_x, 240, button_width, button_height)
+    
+    while True:
+        screen.fill((30, 30, 30))
+        
+        # Draw title
+        title = title_font.render("Select Training Mode", True, (255, 255, 255))
+        screen.blit(title, (80, 20))
+        
+        # Draw buttons
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Button 1: Use trained model
+        color1 = (70, 130, 180) if button1_rect.collidepoint(mouse_pos) else (50, 100, 150)
+        pygame.draw.rect(screen, color1, button1_rect, border_radius=10)
+        text1 = font.render("Use Trained Model", True, (255, 255, 255))
+        screen.blit(text1, (button_x + 85, 100))
+        
+        # Button 2: Train 1 epoch
+        color2 = (70, 130, 180) if button2_rect.collidepoint(mouse_pos) else (50, 100, 150)
+        pygame.draw.rect(screen, color2, button2_rect, border_radius=10)
+        text2 = font.render("Train 1 Epoch", True, (255, 255, 255))
+        screen.blit(text2, (button_x + 110, 180))
+        
+        # Button 3: Train 10 epochs
+        color3 = (70, 130, 180) if button3_rect.collidepoint(mouse_pos) else (50, 100, 150)
+        pygame.draw.rect(screen, color3, button3_rect, border_radius=10)
+        text3 = font.render("Train 10 Epochs", True, (255, 255, 255))
+        screen.blit(text3, (button_x + 100, 260))
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return None
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if button1_rect.collidepoint(event.pos):
+                    pygame.quit()
+                    if not load_trained_model():
+                        print("Training 10 epochs since no model exists...")
+                        train_model(10)
+                    return 'use_trained'
+                elif button2_rect.collidepoint(event.pos):
+                    pygame.quit()
+                    train_model(1)
+                    return 'train_1'
+                elif button3_rect.collidepoint(event.pos):
+                    pygame.quit()
+                    train_model(10)
+                    return 'train_10'
+        
+        pygame.display.flip()
+        clock.tick(60)
 
 # pygame
 
@@ -84,6 +168,7 @@ def draw_digit():
     screen.fill((0, 0, 0))
     drawin = False
     predictions = None
+    has_seen_prediction = False
 
     font = pygame.font.Font(None, 36)
 
@@ -92,14 +177,21 @@ def draw_digit():
             if event.type == pygame.QUIT:
                 return
             if event.type == pygame.MOUSEBUTTONDOWN:
+                # Auto-clear if user is starting a new drawing after seeing a prediction
+                if predictions is not None and has_seen_prediction:
+                    screen.fill((0, 0, 0))
+                    predictions = None
+                    has_seen_prediction = False
                 drawin = True
             if event.type == pygame.MOUSEBUTTONUP:
                 drawin = False
                 predictions = predict_digit(screen)
+                has_seen_prediction = True
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_c:
                     screen.fill((0, 0, 0))
                     predictions = None
+                    has_seen_prediction = False
             if event.type == pygame.MOUSEMOTION and drawin:
                 pygame.draw.circle(screen, (255, 255, 255), event.pos, 8)
 
@@ -132,4 +224,8 @@ def predict_digit(screen):
         _, prediction = torch.max(output, 1)
     return prediction.item()
 
-draw_digit()
+# Main execution
+if __name__ == "__main__":
+    choice = show_menu()
+    if choice is not None:
+        draw_digit()
